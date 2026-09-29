@@ -26,7 +26,11 @@ FPS=$(cat "$OUT/demo-fps.txt")
 ffmpeg -loglevel error -y -framerate "$FPS" -i "$OUT/demo-frames/f%04d.png" \
   -vf "fps=30,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=192:stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a:diff_mode=rectangle" \
   "$OUT/demo.gif"
-rm -rf "$OUT/demo-frames" "$OUT/demo-fps.txt"
+FPS=$(cat "$OUT/drag-fps.txt")
+ffmpeg -loglevel error -y -framerate "$FPS" -i "$OUT/drag-frames/f%04d.png" \
+  -vf "fps=20,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=160:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=2:diff_mode=rectangle" \
+  "$OUT/drag.gif"
+rm -rf "$OUT/demo-frames" "$OUT/demo-fps.txt" "$OUT/drag-frames" "$OUT/drag-fps.txt"
 
 # App icon for the README header.
 cp "$ROOT/build/AppIcon.iconset/icon_256x256@2x.png" "$OUT/icon.png"

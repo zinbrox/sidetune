@@ -92,6 +92,46 @@ struct MockMenuBar: View {
     }
 }
 
+/// Pointer drawn into the drag demo: arrow normally, closed hand while dragging.
+struct FakeCursor: View {
+    let position: CGPoint // SwiftUI scene coordinates
+    let grabbing: Bool
+
+    var body: some View {
+        let image = grabbing ? NSCursor.closedHand.image : NSCursor.arrow.image
+        let hot = grabbing ? NSCursor.closedHand.hotSpot : NSCursor.arrow.hotSpot
+        Image(nsImage: image)
+            .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
+            .offset(x: position.x - hot.x, y: position.y - hot.y)
+    }
+}
+
+/// Window position and pointer for the drag demo, both in AppKit scene coordinates.
+@MainActor
+final class DragScene: ObservableObject {
+    @Published var origin: CGPoint
+    @Published var cursor: CGPoint
+    @Published var grabbing = false
+    init(origin: CGPoint, cursor: CGPoint) { self.origin = origin; self.cursor = cursor }
+}
+
+struct DragStage: View {
+    @ObservedObject var scene: DragScene
+    @ObservedObject var layout: OverlayLayout
+    let router: MediaRouter
+    let settings: Settings
+    let size: CGSize
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Wallpaper()
+            MockMenuBar()
+            Placed(layout: layout, router: router, settings: settings, appKitOrigin: scene.origin, sceneHeight: size.height)
+            FakeCursor(position: CGPoint(x: scene.cursor.x, y: size.height - scene.cursor.y), grabbing: scene.grabbing)
+        }
+    }
+}
+
 /// A SideTune overlay window placed in a scene whose AppKit "screen" is `scene` (origin bottom-left).
 struct Placed: View {
     @ObservedObject var layout: OverlayLayout
@@ -162,7 +202,7 @@ final class Stage {
         }
     }
 
-    private func capture(into dir: URL) {
+    func capture(into dir: URL) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
         p.arguments = ["-x", "-o", "-l", String(window.windowNumber), dir.appendingPathComponent(String(format: "f%04d.png", frame)).path]
@@ -331,5 +371,199 @@ MainActor.assumeIsolated {
         // Playback rate that makes recorded (slowed) motion play at real speed.
         let fps = Double(stage.recordedFrames) / (stage.recordedTime / slow)
         try! String(format: "%.2f", fps).write(to: out.appendingPathComponent("demo-fps.txt"), atomically: true, encoding: .utf8)
+    }
+
+    // 7. Drag tour: floating → right edge → along the edge → beside the notch → left edge.
+    do {
+        let frames = out.appendingPathComponent("drag-frames")
+        try? FileManager.default.removeItem(at: frames)
+        try! FileManager.default.createDirectory(at: frames, withIntermediateDirectories: true)
+        Theme.slowdown = 1
+
+        let size = CGSize(width: 1000, height: 600)
+        let vf = CGRect(x: 0, y: 0, width: size.width, height: size.height - 32)
+        let notch = CGRect(x: size.width / 2 - 92.5, y: size.height - 32, width: 185, height: 32)
+        let l = OverlayLayout()
+        l.isVisible = true
+        l.isExpanded = true
+        l.isHovering = true
+        let m = l.metrics
+        let p = m.padding
+        let grab = CGPoint(x: 205, y: 132) // where the pointer holds the card, from its bottom-left
+
+        let startCard = CGPoint(x: 120, y: 190)
+        let scene = DragScene(origin: CGPoint(x: startCard.x - p, y: startCard.y - p),
+                              cursor: CGPoint(x: startCard.x + grab.x, y: startCard.y + grab.y))
+        router.previewSet(Resolution(nowPlaying: trackA, target: .system, status: .ok))
+
+        let stage = Stage(size: size, out: out, root: DragStage(scene: scene, layout: l, router: router, settings: settings, size: size))
+        stage.settle(1.0)
+        Theme.slowdown = Double(CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : "6")!
+        Theme.slowdownStart = Date()
+        let slow = Theme.slowdown
+        var frameCount = 0
+        let virtualStart = Theme.playbackDate(Date())
+
+        func still() -> Transaction { var t = Transaction(); t.disablesAnimations = true; return t }
+        func ease(_ t: Double) -> Double { t < 0.5 ? 2 * t * t : 1 - pow(-2 * t + 2, 2) / 2 }
+
+        /// Runs `update(progress)` every captured frame for `seconds` of on-screen time.
+        @MainActor func run(_ seconds: Double, _ update: (Double) -> Void = { _ in }) {
+            let begin = Theme.playbackDate(Date())
+            while true {
+                let v = Theme.playbackDate(Date()).timeIntervalSince(begin) / seconds
+                if v >= 1 { break }
+                update(v)
+                stage.settle(0.01)
+                stage.capture(into: frames)
+                frameCount += 1
+            }
+        }
+
+        /// Pointer glides to `to` (not dragging).
+        @MainActor func point(to: CGPoint, _ seconds: Double) {
+            let from = scene.cursor
+            run(seconds) { v in
+                let e = CGFloat(ease(v))
+                withTransaction(still()) { scene.cursor = CGPoint(x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e) }
+            }
+        }
+
+        /// Drags the card along a gently arced path, with the app's magnet pull, snap preview and sway.
+        @MainActor func drag(to: CGPoint, arc: CGFloat, _ seconds: Double) {
+            let from = scene.cursor, originStart = scene.origin
+            var lastCursor = from, lastTime = Theme.playbackDate(Date())
+            run(seconds) { v in
+                let e = CGFloat(ease(v))
+                let bump = sin(CGFloat(v) * .pi) * arc
+                let c = CGPoint(x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e + bump)
+                var o = CGPoint(x: originStart.x + c.x - from.x, y: originStart.y + c.y - from.y)
+                let pull = EdgeSnapper.magnetOffset(card: m.floatingCard(windowOrigin: o), in: vf, threshold: 36, gap: m.dockGap)
+                o.x += pull.dx
+                o.y += pull.dy
+                let preview = EdgeSnapper.nearestEdge(card: m.floatingCard(windowOrigin: o), in: vf, threshold: 36)
+                let now = Theme.playbackDate(Date())
+                let dt = max(now.timeIntervalSince(lastTime), 0.001)
+                let tilt = Double(((c.x - lastCursor.x) / CGFloat(dt) / 400).clamped(to: -5...5))
+                lastCursor = c
+                lastTime = now
+                withTransaction(still()) {
+                    scene.cursor = c
+                    scene.origin = o
+                }
+                if preview != l.snapPreview { withAnimation(Theme.snappy) { l.snapPreview = preview } }
+                withAnimation(Theme.timed(.interactiveSpring(response: 0.25, dampingFraction: 0.7))) { l.dragTilt = tilt }
+            }
+        }
+
+        /// Grabs the player where the pointer is: it undocks and opens, as in the app.
+        @MainActor func pickUp() {
+            withTransaction(still()) {
+                scene.grabbing = true
+            }
+            withAnimation(Theme.morph) {
+                l.isDragging = true
+                l.edge = nil
+                l.notchWing = nil
+                l.isExpanded = true
+                l.isHovering = true
+            }
+        }
+
+        /// Lets go: docks to the edge the card is near (or beside the notch), with the dock spring.
+        @MainActor func drop(notchSide: NotchSide? = nil) {
+            let card = m.floatingCard(windowOrigin: scene.origin)
+            scene.grabbing = false
+            withAnimation(Theme.timed(.spring(response: 0.5, dampingFraction: 0.4))) { l.dragTilt = 0 }
+            withAnimation(Theme.snappy) {
+                l.isDragging = false
+                l.snapPreview = nil
+            }
+            if let side = notchSide {
+                let nl = m.notchLayout(notch: notch, side: side, in: vf)
+                withAnimation(Theme.morph) {
+                    scene.origin = nl.windowOrigin
+                    l.edge = .top
+                    l.notchWing = nl.wing
+                    l.notchSide = side
+                }
+            } else if let edge = EdgeSnapper.nearestEdge(card: card, in: vf, threshold: 36) {
+                withAnimation(Theme.morph) {
+                    scene.origin = m.windowOrigin(docked: edge, along: m.along(card: card, edge: edge, in: vf), in: vf)
+                    l.edge = edge
+                }
+            }
+        }
+
+        @MainActor func collapse() {
+            withAnimation(Theme.morph) {
+                l.isHovering = false
+                l.isExpanded = false
+            }
+        }
+
+        /// Pointer position over the collapsed tab / wing, in scene coordinates.
+        @MainActor func tabCenter() -> CGPoint {
+            let r = l.notchWing != nil ? (l.wingRect ?? .zero) : l.tabRect
+            let size = m.windowSize
+            return CGPoint(x: scene.origin.x + r.midX, y: scene.origin.y + size.height - r.midY)
+        }
+
+        // Floating, then drag to the right edge.
+        run(0.5)
+        pickUp()
+        run(0.12)
+        drag(to: CGPoint(x: vf.maxX - 395 + grab.x, y: 250 + grab.y), arc: 50, 1.1)
+        drop()
+        run(0.45)
+        point(to: CGPoint(x: scene.cursor.x - 280, y: scene.cursor.y - 120), 0.4)
+        collapse()
+        run(0.55)
+
+        // Grab the tab and slide it down the edge.
+        point(to: tabCenter(), 0.45)
+        pickUp()
+        run(0.15)
+        // Straight down: the card stays on the edge the whole way.
+        drag(to: CGPoint(x: scene.cursor.x, y: scene.cursor.y - 250), arc: 0, 1.0)
+        drop()
+        run(0.4)
+        point(to: CGPoint(x: scene.cursor.x - 260, y: scene.cursor.y + 90), 0.35)
+        collapse()
+        run(0.5)
+
+        // Up to the notch.
+        point(to: tabCenter(), 0.45)
+        pickUp()
+        run(0.15)
+        drag(to: CGPoint(x: size.width / 2 + 80, y: vf.maxY - 20), arc: 40, 1.25)
+        drop(notchSide: .right)
+        run(0.35)
+        point(to: CGPoint(x: scene.cursor.x + 60, y: scene.cursor.y - 200), 0.35)
+        collapse()
+        run(0.5)
+        // Hover the wing: the card drops down under the notch.
+        point(to: tabCenter(), 0.45)
+        withAnimation(Theme.snappy) { l.isHovering = true }
+        run(0.1)
+        withAnimation(Theme.morph) { l.isExpanded = true }
+        run(0.9)
+
+        // Across to the left edge.
+        point(to: CGPoint(x: scene.origin.x + l.cardRect.minX + grab.x, y: scene.origin.y + m.windowSize.height - l.cardRect.maxY + grab.y), 0.3)
+        pickUp()
+        run(0.12)
+        drag(to: CGPoint(x: 20 + grab.x, y: 300 + grab.y), arc: 60, 1.2)
+        drop()
+        run(0.4)
+        point(to: CGPoint(x: scene.cursor.x + 300, y: scene.cursor.y - 60), 0.4)
+        collapse()
+        run(0.8)
+        stage.close()
+
+        let virtualTime = Theme.playbackDate(Date()).timeIntervalSince(virtualStart)
+        try! String(format: "%.2f", Double(frameCount) / virtualTime).write(to: out.appendingPathComponent("drag-fps.txt"), atomically: true, encoding: .utf8)
+        _ = slow
+        Theme.slowdown = 1
     }
 }

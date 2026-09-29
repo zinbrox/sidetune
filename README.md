@@ -16,7 +16,8 @@
 </p>
 
 <p align="center">
-  <img src="docs/hero.png" alt="SideTune docked on the right edge of the screen">
+  <img src="docs/hero.png" alt="SideTune docked on the right edge of the screen"><br>
+  <sub>Docked to the right edge, open. The card takes its colors from the album art.</sub>
 </p>
 
 ## Features
@@ -30,28 +31,42 @@
 - **Resizable**, tinted by the album artwork, with lots of small animations.
 - **Menu bar mini player** next to battery and Wi-Fi.
 
+## See it in action
+
 <p align="center">
-  <img src="docs/demo.gif" width="720" alt="Hovering the tab opens the player, skipping a track, then collapsing">
+  <img src="docs/drag.gif" width="720" alt="Dragging the player to the right edge, along it, beside the notch and to the left edge"><br>
+  <sub><b>Put it anywhere.</b> Drag it to any edge and the magnet snaps it in. Slide it along the edge, drop it beside the notch, or throw it to the other side.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/demo.gif" width="720" alt="Hovering the tab opens the player, skipping a track, then collapsing"><br>
+  <sub><b>Hover to open.</b> Docked, it waits as a slim tab. Hover to open the full player; skip, pause, move on.</sub>
 </p>
 
 <table>
   <tr>
-    <td><img src="docs/tab.png" alt="Collapsed tab docked to the edge"></td>
-    <td><img src="docs/menubar.png" alt="Menu bar mini player"></td>
+    <td width="50%"><img src="docs/tab.png" alt="Collapsed tab docked to the edge"></td>
+    <td width="50%"><img src="docs/menubar.png" alt="Menu bar mini player"></td>
   </tr>
   <tr>
-    <td align="center">Collapsed tab</td>
-    <td align="center">Menu bar mini player</td>
+    <td align="center"><sub><b>Collapsed tab.</b> Artwork and a live equalizer, flush against the edge. It pops out briefly when a new song starts.</sub></td>
+    <td align="center"><sub><b>Menu bar mini player.</b> Click the note next to battery and Wi-Fi. Right-click it for sizes, the notch and settings.</sub></td>
   </tr>
 </table>
 
 <p align="center">
   <img src="docs/notch-collapsed.png" alt="Collapsed beside the notch"><br>
-  <img src="docs/notch.png" alt="Expanded below the notch">
+  <sub><b>Beside the notch.</b> A black strip that continues the notch, with the artwork and equalizer. It stays clear of menu bar items.</sub>
 </p>
 
 <p align="center">
-  <img src="docs/sizes.png" alt="Smallest and largest sizes">
+  <img src="docs/notch.png" alt="Expanded below the notch"><br>
+  <sub><b>Opens from the notch.</b> Hover the strip and the player hangs straight down from it.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/sizes.png" alt="Smallest and largest sizes"><br>
+  <sub><b>Resizable.</b> Drag the corner grip, or pick Small, Medium or Large. Everything is laid out again at each size, so it stays sharp.</sub>
 </p>
 
 ## Installation
