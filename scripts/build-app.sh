@@ -8,6 +8,8 @@ APP="$BUILD/SideTune.app"
 ADAPTER="$ROOT/Vendor/mediaremote-adapter"
 CONFIG="${1:-release}"
 ARCH="$(uname -m)"
+# ARCHS="arm64 x86_64" builds a universal binary (used by scripts/release.sh).
+ARCHS=(${=ARCHS:-$ARCH})
 
 mkdir -p "$BUILD"
 
@@ -33,8 +35,13 @@ echo "› Compiling SideTune ($CONFIG)"
 OPT=(-O)
 [[ "$CONFIG" == "debug" ]] && OPT=(-Onone -g)
 SOURCES=("${(@f)$(find "$ROOT/Sources/SideTune" -name '*.swift' | sort)}")
-"$ROOT/scripts/swiftc.sh" "${OPT[@]}" -swift-version 5 -target "$ARCH-apple-macos14" \
-  -module-name SideTune "${SOURCES[@]}" -o "$BUILD/SideTune"
+SLICES=()
+for A in "${ARCHS[@]}"; do
+  "$ROOT/scripts/swiftc.sh" "${OPT[@]}" -swift-version 5 -target "$A-apple-macos14" \
+    -module-name SideTune "${SOURCES[@]}" -o "$BUILD/SideTune-$A"
+  SLICES+=("$BUILD/SideTune-$A")
+done
+lipo -create "${SLICES[@]}" -output "$BUILD/SideTune"
 
 # 4. Bundle.
 echo "› Assembling bundle"
@@ -42,6 +49,9 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BUILD/SideTune" "$APP/Contents/MacOS/SideTune"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
+if [[ -n "${VERSION:-}" ]]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+fi
 cp "$BUILD/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 cp "$ADAPTER/bin/mediaremote-adapter.pl" "$APP/Contents/Resources/"
 cp -R "$ADAPTER/build/MediaRemoteAdapter.framework" "$APP/Contents/Resources/"

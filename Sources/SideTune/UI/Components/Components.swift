@@ -43,7 +43,7 @@ struct ArtworkView: View {
         // Shrinks a touch when paused, like the Music app.
         .scaleEffect(nowPlaying?.isPlaying == false ? 0.93 : 1)
         .animation(Theme.morph, value: nowPlaying?.isPlaying)
-        .animation(.easeInOut(duration: 0.35), value: nowPlaying?.artworkKey)
+        .animation(Theme.timed(.easeInOut(duration: 0.35)), value: nowPlaying?.artworkKey)
     }
 
     private var placeholder: some View {
@@ -68,7 +68,7 @@ struct AudioBars: View {
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30, paused: !isPlaying)) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
+            let t = Theme.clock(context.date)
             HStack(alignment: .center, spacing: barWidth * 0.75) {
                 ForEach(0..<barCount, id: \.self) { i in
                     Capsule()
@@ -181,7 +181,7 @@ struct ScrubBar: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.25)) { context in
             let duration = nowPlaying?.duration ?? 0
-            let elapsed = nowPlaying?.elapsed(at: context.date) ?? 0
+            let elapsed = nowPlaying?.elapsed(at: Theme.playbackDate(context.date)) ?? 0
             let live = duration > 0 ? elapsed / duration : 0
             let fraction = (dragFraction ?? live).clamped(to: 0...1)
             let shown = dragFraction.map { $0 * duration } ?? elapsed
@@ -467,8 +467,8 @@ struct StaggerIn: ViewModifier {
             .offset(y: shown || Theme.reduceMotion ? 0 : 8)
             .blur(radius: shown || Theme.reduceMotion ? 0 : 3)
             .animation(
-                Theme.reduceMotion ? .easeOut(duration: 0.15)
-                    : .spring(response: 0.42, dampingFraction: 0.82).delay(0.05 + Double(index) * 0.045),
+                Theme.timed(Theme.reduceMotion ? .easeOut(duration: 0.15)
+                    : .spring(response: 0.42, dampingFraction: 0.82).delay(0.05 + Double(index) * 0.045)),
                 value: shown
             )
     }
@@ -508,6 +508,6 @@ struct TrackText: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .clipped()
         .animation(Theme.morph, value: text.title)
-        .animation(.easeInOut(duration: 0.25), value: text.subtitle)
+        .animation(Theme.timed(.easeInOut(duration: 0.25)), value: text.subtitle)
     }
 }

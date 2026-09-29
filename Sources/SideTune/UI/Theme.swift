@@ -32,20 +32,34 @@ enum Theme {
         return NSColor(calibratedHue: hue, saturation: min(max(sat, 0.45), 0.8), brightness: max(bri, 0.88), alpha: 1)
     }
 
+    /// Slow-motion factor for recording the demo GIF (scripts/screenshots.sh); 1 in the app.
+    static var slowdown: Double = 1
+    /// Animation clock, slowed along with `slowdown`.
+    static func clock(_ date: Date) -> TimeInterval { date.timeIntervalSinceReferenceDate / slowdown }
+    static func timed(_ a: Animation) -> Animation { slowdown == 1 ? a : a.speed(1 / slowdown) }
+    /// When slow motion started; `playbackDate` runs slowed from here.
+    static var slowdownStart = Date()
+    /// Wall-clock time for playback position, slowed along with animations while recording.
+    static func playbackDate(_ date: Date) -> Date {
+        slowdown == 1 ? date : slowdownStart.addingTimeInterval(date.timeIntervalSince(slowdownStart) / slowdown)
+    }
+
     /// Springs, or quick fades when the user asked for reduced motion.
     static var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
-    static var morph: Animation { reduceMotion ? .easeInOut(duration: 0.18) : .spring(response: 0.44, dampingFraction: 0.8) }
-    static var snappy: Animation { reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.3, dampingFraction: 0.72) }
+    static var morph: Animation { timed(reduceMotion ? .easeInOut(duration: 0.18) : .spring(response: 0.44, dampingFraction: 0.8)) }
+    static var snappy: Animation { timed(reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.3, dampingFraction: 0.72)) }
 }
 
 /// Behind-window blur that stays active even though the overlay window is never key.
 struct VisualEffect: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .hudWindow
+    /// The screenshot renderer blurs its own wallpaper instead of the real desktop.
+    static var blending: NSVisualEffectView.BlendingMode = .behindWindow
 
     func makeNSView(context: Context) -> NSVisualEffectView {
         let v = NSVisualEffectView()
         v.material = material
-        v.blendingMode = .behindWindow
+        v.blendingMode = Self.blending
         v.state = .active
         return v
     }

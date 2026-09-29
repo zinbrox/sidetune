@@ -175,7 +175,7 @@ struct CardBackground: View {
             if let artwork {
                 // Slowly drifting, rotating blur of the artwork while music plays; frozen when paused.
                 TimelineView(.animation(minimumInterval: 1 / 30, paused: !isPlaying || Theme.reduceMotion)) { context in
-                    let t = context.date.timeIntervalSinceReferenceDate
+                    let t = Theme.clock(context.date)
                     // Color.clear sizes to the container; the image fills it without affecting layout.
                     Color.clear
                         .overlay {
@@ -199,8 +199,8 @@ struct CardBackground: View {
             LinearGradient(colors: [.clear, .black.opacity(0.45)], startPoint: .top, endPoint: .bottom)
             Color.black.opacity(solid ? 1 : 0)
         }
-        .animation(.easeInOut(duration: 0.3), value: solid)
-        .animation(.easeInOut(duration: 0.6), value: artworkKey)
+        .animation(Theme.timed(.easeInOut(duration: 0.3)), value: solid)
+        .animation(Theme.timed(.easeInOut(duration: 0.6)), value: artworkKey)
         .allowsHitTesting(false)
     }
 }

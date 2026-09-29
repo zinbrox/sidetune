@@ -233,7 +233,8 @@ final class MediaRouter: ObservableObject {
 #if PREVIEW
 extension MediaRouter {
     /// Used by scripts/preview.sh to render the UI with sample data.
-    func previewSet(_ r: Resolution) {
+    func previewSet(_ r: Resolution, direction: CGFloat = 1) {
+        trackDirection = direction
         resolution = r
         accent = Theme.accent(from: r.nowPlaying?.artwork)
     }
