@@ -8,9 +8,17 @@ struct ScriptableApp {
     let usesArtworkURL: Bool
     /// Repeat modes the app can do, in the order a repeat button cycles through them.
     let repeatCycle: [RepeatMode]
+    /// Distributed notification the app posts when playback changes (play/pause, track, seek).
+    let changeNotification: String
 
-    static let spotify = ScriptableApp(bundleID: "com.spotify.client", durationScale: 1000, usesArtworkURL: true, repeatCycle: [.off, .all])
-    static let music = ScriptableApp(bundleID: "com.apple.Music", durationScale: 1, usesArtworkURL: false, repeatCycle: [.off, .all, .one])
+    static let spotify = ScriptableApp(
+        bundleID: "com.spotify.client", durationScale: 1000, usesArtworkURL: true, repeatCycle: [.off, .all],
+        changeNotification: "com.spotify.client.PlaybackStateChanged"
+    )
+    static let music = ScriptableApp(
+        bundleID: "com.apple.Music", durationScale: 1, usesArtworkURL: false, repeatCycle: [.off, .all, .one],
+        changeNotification: "com.apple.Music.playerInfo"
+    )
     static let all = [spotify, music]
     static func app(_ bundleID: String?) -> ScriptableApp? { all.first { $0.bundleID == bundleID } }
 
@@ -80,7 +88,8 @@ struct ScriptableApp {
     }
 }
 
-/// Polls one scriptable app while it's pinned.
+/// Reads one scriptable app while it's pinned: on its change notifications, plus a slow poll
+/// as a safety net (AppleScript round trips cost both us and the player CPU).
 final class ScriptableSource {
     let app: ScriptableApp
     /// Called on the main queue.
@@ -91,6 +100,7 @@ final class ScriptableSource {
     private static var compiled: [String: NSAppleScript] = [:]
 
     private var timer: Timer?
+    private var observer: NSObjectProtocol?
     private var inFlight = false
     private var last: NowPlaying?
     private var artworkCache: (key: String, image: NSImage?)?
@@ -102,15 +112,21 @@ final class ScriptableSource {
 
     func start() {
         guard timer == nil else { return }
-        let t = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.poll() }
+        let t = Timer(timeInterval: 5, repeats: true) { [weak self] _ in self?.poll() }
+        t.tolerance = 1
         RunLoop.main.add(t, forMode: .common)
         timer = t
+        observer = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name(app.changeNotification), object: nil, queue: .main
+        ) { [weak self] _ in self?.poll() }
         poll()
     }
 
     func stop() {
         timer?.invalidate()
         timer = nil
+        if let observer { DistributedNotificationCenter.default().removeObserver(observer) }
+        observer = nil
         last = nil
     }
 
@@ -170,7 +186,7 @@ final class ScriptableSource {
                 artwork: artworkCache?.key == key ? artworkCache?.image : nil,
                 artworkKey: key
             )
-            // Polls land ~1s apart with jitter; keep the previous time anchor unless it drifted,
+            // Polls land at irregular times; keep the previous time anchor unless it drifted,
             // so the progress bar doesn't stutter backwards every second.
             if let last, last.trackKey == np.trackKey, last.isPlaying == np.isPlaying,
                abs(last.elapsed(at: np.timestamp) - np.elapsed) < 1.5 {

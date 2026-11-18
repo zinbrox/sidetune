@@ -174,25 +174,10 @@ struct CardBackground: View {
             Color.black.opacity(0.42)
             if let artwork {
                 // Slowly drifting, rotating blur of the artwork while music plays; frozen when paused.
-                TimelineView(.animation(minimumInterval: 1 / 30, paused: !isPlaying || Theme.reduceMotion)) { context in
-                    let t = Theme.clock(context.date)
-                    // Color.clear sizes to the container; the image fills it without affecting layout.
-                    Color.clear
-                        .overlay {
-                            Image(nsImage: artwork)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .scaleEffect(1.7)
-                                .rotationEffect(.degrees(t.truncatingRemainder(dividingBy: 90) * 4))
-                                .offset(x: sin(t * 0.23) * 18, y: cos(t * 0.17) * 10)
-                                .blur(radius: 42)
-                                .saturation(1.7)
-                        }
-                        .clipped()
-                }
-                .opacity(0.72)
-                .id(artworkKey)
-                .transition(.opacity)
+                DriftingArtwork(image: artwork, key: artworkKey, animating: isPlaying && !solid)
+                    .opacity(0.72)
+                    .id(artworkKey)
+                    .transition(.opacity)
             }
             // Accent wash from the top-left, vignette to the bottom-right for text contrast.
             LinearGradient(colors: [accent.opacity(0.2), .clear], startPoint: .topLeading, endPoint: .center)

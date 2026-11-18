@@ -103,10 +103,12 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             if Theme.reduceMotion { item?.button?.image = Self.icon(playing: true, phase: 1) }
             return
         }
-        let t = Timer(timeInterval: 1.0 / 12, repeats: true) { [weak self] _ in
+        // Each new image makes AppKit re-snapshot the item for every menu bar, so keep the rate low.
+        let fps = 5.0
+        let t = Timer(timeInterval: 1 / fps, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                self.barsPhase += 1.0 / 12
+                self.barsPhase += 1 / fps
                 self.item?.button?.image = Self.icon(playing: true, phase: self.barsPhase)
             }
         }

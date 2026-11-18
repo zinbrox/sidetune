@@ -56,41 +56,6 @@ struct ArtworkView: View {
     }
 }
 
-// MARK: Audio bars
-
-/// Little equalizer that dances while playing and settles flat when paused.
-struct AudioBars: View {
-    let isPlaying: Bool
-    let color: Color
-    var barCount = 4
-    var height: CGFloat = 14
-    var barWidth: CGFloat = 3
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: !isPlaying)) { context in
-            let t = Theme.clock(context.date)
-            HStack(alignment: .center, spacing: barWidth * 0.75) {
-                ForEach(0..<barCount, id: \.self) { i in
-                    Capsule()
-                        .fill(color)
-                        .frame(width: barWidth, height: barHeight(i, t))
-                }
-            }
-            .frame(height: height)
-            .animation(.easeOut(duration: 0.12), value: isPlaying)
-        }
-    }
-
-    private func barHeight(_ i: Int, _ t: TimeInterval) -> CGFloat {
-        let minH = barWidth
-        guard isPlaying else { return minH }
-        let d = Double(i)
-        // Two sines at unrelated rates per bar reads as organic rather than looping.
-        let v = 0.5 + 0.3 * sin(t * (5.1 + d * 1.7) + d * 1.3) + 0.2 * sin(t * (8.3 - d * 0.9) + d * 2.1)
-        return minH + (height - minH) * CGFloat(v.clamped(to: 0...1))
-    }
-}
-
 // MARK: Marquee
 
 /// Single line that scrolls when it doesn't fit, pausing at the start of each loop.
@@ -179,7 +144,9 @@ struct ScrubBar: View {
     @State private var hovering = false
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.25)) { context in
+        // Ticks twice a second without animating between ticks: a linear animation per tick kept
+        // SwiftUI rendering every display frame. The bar moves well under a point per tick.
+        TimelineView(.periodic(from: .now, by: 0.5)) { context in
             let duration = nowPlaying?.duration ?? 0
             let elapsed = nowPlaying?.elapsed(at: Theme.playbackDate(context.date)) ?? 0
             let live = duration > 0 ? elapsed / duration : 0
@@ -224,7 +191,6 @@ struct ScrubBar: View {
                 Capsule()
                     .fill(LinearGradient(colors: [accent.opacity(0.85), accent], startPoint: .leading, endPoint: .trailing))
                     .frame(width: duration > 0 ? max(w * fraction, h) : 0, height: h)
-                    .animation(dragFraction == nil ? .linear(duration: 0.25) : nil, value: fraction)
                 Circle()
                     .fill(.white)
                     .shadow(color: .black.opacity(0.3), radius: 2)
@@ -232,7 +198,6 @@ struct ScrubBar: View {
                     .offset(x: w * fraction - 5.5)
                     .scaleEffect(active ? 1 : 0.2)
                     .opacity(active ? 1 : 0)
-                    .animation(dragFraction == nil ? .linear(duration: 0.25) : nil, value: fraction)
             }
             .frame(width: w, height: geo.size.height, alignment: .leading)
             .contentShape(Rectangle())

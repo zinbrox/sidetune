@@ -71,9 +71,11 @@ final class MediaRouter: ObservableObject {
         }
         refreshSources()
 
-        let t = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
+        // Shuffle/repeat changed in the player itself; our own buttons re-read right away.
+        let t = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.pollModes() }
         }
+        t.tolerance = 1
         RunLoop.main.add(t, forMode: .common)
         modesTimer = t
     }
